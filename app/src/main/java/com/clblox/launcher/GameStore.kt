@@ -20,7 +20,14 @@ class GameStore(context: Context) {
         prefs.edit().putString(KEY, text).apply()
     }
 
+    fun lastPlayed(): Long = prefs.getLong(LAST, 0L)
+
+    fun setLastPlayed(placeId: Long) {
+        prefs.edit().putLong(LAST, placeId).apply()
+    }
+
     private companion object {
         const val KEY = "games"
+        const val LAST = "last_played"
     }
 }

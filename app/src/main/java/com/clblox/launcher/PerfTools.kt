@@ -14,19 +14,11 @@ import android.provider.Settings
  */
 object PerfTools {
 
-    fun thermalStatus(context: Context): String {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return "Not supported on this Android version"
-        val pm = context.getSystemService(PowerManager::class.java)
-        return when (pm.currentThermalStatus) {
-            PowerManager.THERMAL_STATUS_NONE -> "Cool"
-            PowerManager.THERMAL_STATUS_LIGHT -> "Warm"
-            PowerManager.THERMAL_STATUS_MODERATE -> "Hot (performance may drop)"
-            PowerManager.THERMAL_STATUS_SEVERE -> "Very hot"
-            PowerManager.THERMAL_STATUS_CRITICAL,
-            PowerManager.THERMAL_STATUS_EMERGENCY,
-            PowerManager.THERMAL_STATUS_SHUTDOWN -> "Critical - stop playing"
-            else -> "Unknown"
-        }
+    /** 0 = cool, 1 = warm, 2 = hot, 3 = very hot, 4 = critical. -1 if unsupported. */
+    fun thermalLevel(context: Context): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return -1
+        val status = context.getSystemService(PowerManager::class.java).currentThermalStatus
+        return status.coerceIn(0, 4)
     }
 
     fun batterySaverOn(context: Context): Boolean =
@@ -34,12 +26,12 @@ object PerfTools {
 
     /** Current Game Mode of this app's category (Android 12+). Reading only. */
     fun gameMode(context: Context): String {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return "Not supported (Android 12+)"
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return "Needs Android 12+"
         return when (context.getSystemService(GameManager::class.java).gameMode) {
             GameManager.GAME_MODE_PERFORMANCE -> "Performance"
             GameManager.GAME_MODE_BATTERY -> "Battery"
             GameManager.GAME_MODE_STANDARD -> "Standard"
-            else -> "Unsupported / unknown"
+            else -> "Unknown"
         }
     }
 
