@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -30,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,17 +40,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.clblox.launcher.Game
+import com.clblox.launcher.GameInfo
+import com.clblox.launcher.GameInfoRepo
+import com.clblox.launcher.compact
 
 /**
  * The signature element: a solid block with a hard, offset shadow.
@@ -148,12 +157,43 @@ fun StudGlyph(seed: Long, tint: Color, glyphSize: Dp = 34.dp) {
 }
 
 @Composable
+private fun PlayingChip(playing: Long, ink: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(CL.Mint))
+        Spacer(Modifier.size(6.dp))
+        Text(
+            "${compact(playing)} playing",
+            color = ink,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
 fun GameTile(game: Game, onPlay: () -> Unit, onRemove: () -> Unit, modifier: Modifier = Modifier) {
+    val info by produceState<GameInfo?>(null, game.placeId) { value = GameInfoRepo.get(game.placeId) }
     val color = CL.tileColor(game.placeId)
-    val ink = CL.onTile(color)
-    Block(onClick = onPlay, color = color, modifier = modifier.height(150.dp)) {
+    val iconUrl = info?.iconUrl
+    val hasImage = iconUrl != null
+    val ink = if (hasImage) CL.Mist else CL.onTile(color)
+    val name = info?.name?.takeIf { it.isNotBlank() } ?: game.name
+
+    Block(onClick = onPlay, color = color, modifier = modifier.height(170.dp)) {
+        if (iconUrl != null) {
+            AsyncImage(
+                model = iconUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(Color.Transparent, CL.Night.copy(alpha = 0.92f)))
+                )
+            )
+        }
         Column(
-            Modifier.fillMaxSize().padding(16.dp),
+            Modifier.fillMaxSize().padding(14.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -161,24 +201,39 @@ fun GameTile(game: Game, onPlay: () -> Unit, onRemove: () -> Unit, modifier: Mod
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                StudGlyph(game.placeId, ink.copy(alpha = 0.85f))
-                IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Remove ${game.name}", tint = ink)
+                if (hasImage) Spacer(Modifier.size(1.dp)) else StudGlyph(game.placeId, ink.copy(alpha = 0.85f))
+                IconButton(
+                    onClick = onRemove,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(if (hasImage) CL.Night.copy(alpha = 0.55f) else Color.Transparent)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Remove $name", tint = ink)
                 }
             }
-            Text(
-                game.name,
-                color = ink,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    name,
+                    color = ink,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                info?.let { PlayingChip(it.playing, ink) }
+            }
         }
     }
 }
 
 @Composable
 fun HeroBlock(game: Game?, onPlay: () -> Unit, onAdd: () -> Unit) {
+    val info by produceState<GameInfo?>(null, game?.placeId) {
+        value = game?.let { GameInfoRepo.get(it.placeId) }
+    }
+    val iconUrl = info?.iconUrl
+    val name = info?.name?.takeIf { it.isNotBlank() } ?: game?.name ?: "No games yet"
+
     Block(
         onClick = null,
         color = CL.Violet,
@@ -186,17 +241,33 @@ fun HeroBlock(game: Game?, onPlay: () -> Unit, onAdd: () -> Unit) {
         shape = RoundedCornerShape(32.dp),
         depth = 8.dp
     ) {
-        StudGlyph(
-            seed = game?.placeId ?: 0L,
-            tint = Color.White.copy(alpha = 0.2f),
-            glyphSize = 64.dp,
-        )
+        if (iconUrl != null) {
+            AsyncImage(
+                model = iconUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize()
+            )
+            Box(
+                Modifier.matchParentSize().background(
+                    Brush.horizontalGradient(listOf(CL.Violet, CL.Violet.copy(alpha = 0.55f)))
+                )
+            )
+        } else {
+            Box(Modifier.align(Alignment.TopEnd).padding(20.dp)) {
+                StudGlyph(
+                    seed = game?.placeId ?: 0L,
+                    tint = Color.White.copy(alpha = 0.2f),
+                    glyphSize = 64.dp
+                )
+            }
+        }
         Column(
             Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                game?.name ?: "No games yet",
+                name,
                 color = Color.White,
                 style = MaterialTheme.typography.headlineLarge,
                 maxLines = 2,
@@ -211,6 +282,7 @@ fun HeroBlock(game: Game?, onPlay: () -> Unit, onAdd: () -> Unit) {
                 )
                 BlockButton("Add game", onAdd)
             } else {
+                info?.let { PlayingChip(it.playing, Color.White) }
                 BlockButton("Play", onPlay)
             }
         }
